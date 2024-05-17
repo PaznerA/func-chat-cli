@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"reflect"
 	"strings"
 	"time"
 
@@ -15,7 +14,7 @@ import (
 )
 
 type Tool interface {
-	Execute(input interface{}) (output interface{}, err error)
+	Execute(input json.RawMessage) (json.RawMessage, error)
 	LoadDefinition() ParamsDefinition
 }
 
@@ -90,7 +89,7 @@ func RunConversation(messages []openai.ChatCompletionMessage) []openai.ChatCompl
 
 		functionToCall := resp.Choices[0].Message.FunctionCall.Name
 		args := resp.Choices[0].Message.FunctionCall.Arguments
-		functionResponse := Execute(functionToCall, args)
+		functionResponse := Execute(functionToCall, json.RawMessage(args))
 
 		message3 := openai.ChatCompletionMessage{
 			Role:    openai.ChatMessageRoleFunction,
@@ -129,85 +128,22 @@ func readApiKey(fname string) string {
 	return strings.TrimSpace(string(fileContent))
 }
 
-func Execute(funcName string, args string) string {
+func Execute(funcName string, args json.RawMessage) string {
 	resp := "{}"
 	functionMap := map[string]Tool{
 		"ExecuteGetCurrentWeather": &WeatherTool{},
 		"FileGetContents":          &FileGetContentsTool{},
+		"Wget":                     &WgetTool{},
 	}
 
 	if tool, ok := functionMap[funcName]; ok {
-		// Load the definition of the tool
-		definition := tool.LoadDefinition()
-		propertiesType := reflect.TypeOf(definition.Properties).Elem()
-
-		// Create a new instance of the input type
-		inputValue := reflect.New(propertiesType).Interface()
-
-		// Unmarshal JSON arguments into the input instance
-		if err := json.Unmarshal([]byte(args), &inputValue); err != nil {
-			panic(err)
-		}
-
-		// Execute the tool with the input value
-		result, err := tool.Execute(inputValue)
+		result, err := tool.Execute(args)
 		if err != nil {
 			panic(err)
 		}
-
-		// Marshal the result to JSON
-		r, _ := json.Marshal(result)
-		resp = string(r)
+		resp = string(result)
 	}
 	return resp
-}
-
-
-// WeatherTool is a tool for getting the current weather
-type WeatherTool struct{}
-
-func (wt *WeatherTool) Execute(input interface{}) (output interface{}, err error) {
-	wr := input.(*WeatherRequest)
-	return ExecuteGetCurrentWeather(*wr), nil
-}
-
-func (wt *WeatherTool) LoadDefinition() ParamsDefinition {
-	return paramsDefExecuteGetCurrentWeather()
-}
-
-// FileGetContentsTool is a tool for getting the contents of a file
-type FileGetContentsTool struct{}
-
-func (fgct *FileGetContentsTool) Execute(input interface{}) (output interface{}, err error) {
-	fgc := input.(*FileGetContentsRequest)
-	return FileGetContents(*fgc), nil
-}
-
-func (fgct *FileGetContentsTool) LoadDefinition() ParamsDefinition {
-	return paramsDefExecuteFileGetContents()
-}
-
-func ExecuteGetCurrentWeather(wr WeatherRequest) WeatherResponse {
-	println(wr.Location)
-	if len(wr.Unit) == 0 {
-		wr.Unit = "celsius"
-	}
-	temperature := "72"
-	forecast := []string{"sunny", "windy"}
-	return WeatherResponse{
-		Location:    wr.Location,
-		Temperature: temperature,
-		Unit:        wr.Unit,
-		Forecast:    forecast,
-	}
-}
-
-func FileGetContents(fgc FileGetContentsRequest) FileGetContentsResponse {
-	content, err := os.ReadFile(fgc.Filename)
-	if err != nil {
-		return FileGetContentsResponse{Content: fmt.Sprintf("Error reading file: %v", err)}
-	}
-	return FileGetContentsResponse{Content: string(content)}
 }
 
 func functionDefinitionLoader() []openai.FunctionDefinition {
@@ -218,93 +154,15 @@ func functionDefinitionLoader() []openai.FunctionDefinition {
 			Parameters:  paramsDefExecuteGetCurrentWeather(),
 		},
 		{
-			Name:        "FileGetContents",
+			Name:        "ExecuteFileGetContents",
 			Description: "Get the contents of a file",
 			Parameters:  paramsDefExecuteFileGetContents(),
 		},
-	}
-}
 
-func paramsDefExecuteGetCurrentWeather() ParamsDefinition {
-	return ParamsDefinition{
-		Type: "object",
-		Properties: &WeatherProperties{
-			Location: Location{
-				Type:        "string",
-				Description: "The city and state, e.g. San Francisco, CA",
-			},
-			Unit: Unit{
-				Type: "string",
-				Enum: []string{"celsius", "fahrenheit"},
-			},
+		{
+			Name:        "ExecuteWget",
+			Description: "Get the contents of an URL address",
+			Parameters:  paramsDefExecuteWget(),
 		},
-		Required: []string{"location"},
 	}
-}
-
-func paramsDefExecuteFileGetContents() ParamsDefinition {
-	return ParamsDefinition{
-		Type: "object",
-		Properties: &FileProperties{
-			Filename: Filename{
-				Type:        "string",
-				Description: "The path to the file to read",
-			},
-		},
-		Required: []string{"filename"},
-	}
-}
-
-type ParamsDefinition struct {
-	Type       string      `json:"type"`
-	Properties interface{} `json:"properties"`
-	Required   []string    `json:"required"`
-}
-
-type WeatherProperties struct {
-	Location Location `json:"location"`
-	Unit     Unit     `json:"unit"`
-}
-
-type FileProperties struct {
-	Filename Filename `json:"filename"`
-}
-
-type Location struct {
-	Type        string `json:"type"`
-	Description string `json:"description"`
-}
-
-type Unit struct {
-	Type string   `json:"type"`
-	Enum []string `json:"enum"`
-}
-
-type Filename struct {
-	Type        string `json:"type"`
-	Description string `json:"description"`
-}
-
-// WeatherRequest is a struct for weather requests
-type WeatherRequest struct {
-	Location string `json:"location"`
-	Unit     string `json:"unit"`
-}
-
-// WeatherResponse is a struct for weather responses
-type WeatherResponse struct {
-	Location    string   `json:"location"`
-	Temperature string   `json:"temperature"`
-	Unit        string   `json:"unit"`
-	Forecast    []string `json:"forecast"`
-}
-
-// FileGetContentsRequest is a struct for file contents requests
-type FileGetContentsRequest struct {
-	Filename string `json:"filename"`
-}
-
-// FileGetContentsResponse is a struct for file contents responses
-type FileGetContentsResponse struct {
-	Content string `json:"content"`
 }

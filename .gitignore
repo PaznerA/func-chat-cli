@@ -1,1 +1,8 @@
-/apikey.txt
+# OpenAI API key
+apikey.txt
+
+# debug files - chat history dumped by "file" prompt
+messages*.json
+
+# Executable
+funcChatNano

@@ -26,7 +26,7 @@ cd func-chat-cli
 
 go mod tidy
 ```
-Create a file named apikey.txt in the project root directory and add your OpenAI API key to it.
+3. Create a file named apikey.txt in the project root directory and add your OpenAI API key to it.
 
 ### Usage
 Run the CLI application:

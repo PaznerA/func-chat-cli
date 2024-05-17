@@ -1,3 +1,5 @@
+[![Go](https://github.com/PaznerA/func-chat-cli/actions/workflows/go.yml/badge.svg)](https://github.com/PaznerA/func-chat-cli/actions/workflows/go.yml)
+
 # OpenAI GPT CLI chat with function calling in GO
 This project is a command-line interface (CLI) chat application that leverages the OpenAI API to generate responses and execute custom functions based on user input. The application supports custom tools that can be executed based on the conversation context, including fetching weather information, reading file contents, and making HTTP requests.
 
